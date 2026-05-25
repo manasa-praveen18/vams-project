@@ -181,7 +181,7 @@ function LiveMonitoring({ data }) {
     </div>
   );
 }
-function Analytics({ topApps, dailyUsage }) {
+function Analytics({ topApps, dailyUsage, heatmapData, timelineData }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={cardStyle}>
@@ -224,6 +224,114 @@ function Analytics({ topApps, dailyUsage }) {
             <Line type="monotone" dataKey="sessions" stroke="#00C49F" dot={true} name="Sessions" />
           </LineChart>
         </ResponsiveContainer>
+        <Heatmap data={heatmapData} />
+        <Timeline data={timelineData} />
+      </div>
+    </div>
+  );
+}
+function Heatmap({ data }) {
+  const dates = [...new Set(data.map(d => d.date))].sort();
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  
+  const getColor = (minutes) => {
+    if (!minutes) return '#f0f0f0';
+    if (minutes < 5) return '#c6e48b';
+    if (minutes < 15) return '#7bc96f';
+    if (minutes < 30) return '#239a3b';
+    return '#196127';
+  };
+
+  const getValue = (date, hour) => {
+    const entry = data.find(d => d.date === date && d.hour === hour);
+    return entry ? entry.duration_minutes : 0;
+  };
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitle}>Active Hours Heatmap (minutes per hour)</h3>
+      <div style={{ overflowX: 'auto' }}>
+        <div style={{ display: 'flex', marginBottom: '5px', marginLeft: '60px' }}>
+          {hours.map(h => (
+            <div key={h} style={{ width: '40px', textAlign: 'center', fontSize: '10px', color: '#666' }}>
+              {h}
+            </div>
+          ))}
+        </div>
+        {dates.map(date => (
+          <div key={date} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+            <div style={{ width: '70px', fontSize: '12px', color: '#666' }}>{date.slice(5)}</div>
+            {hours.map(hour => (
+              <div
+                key={hour}
+                style={{
+                  width: '38px',
+                  height: '25px',
+                  backgroundColor: getColor(getValue(date, hour)),
+                  margin: '1px',
+                  borderRadius: '3px',
+                  cursor: 'pointer',
+                  title: `${getValue(date, hour)} min`
+                }}
+                title={`${date} ${hour}:00 — ${getValue(date, hour)} min`}
+              />
+            ))}
+          </div>
+        ))}
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px', alignItems: 'center', fontSize: '12px', color: '#666' }}>
+          <span>Less</span>
+          {['#f0f0f0', '#c6e48b', '#7bc96f', '#239a3b', '#196127'].map(c => (
+            <div key={c} style={{ width: '15px', height: '15px', backgroundColor: c, borderRadius: '2px' }} />
+          ))}
+          <span>More</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+const generateColor = (str) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  return `hsl(${h}, 65%, 50%)`;
+};
+
+function Timeline({ data }) {
+  const getColor = (app) => generateColor(app);
+  const uniqueApps = [...new Set(data.map(d => d.app))];
+
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitle}>Today's Activity Timeline</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '500px', overflowY: 'auto' }}>
+        {data.map((entry, index) => (
+          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '80px', fontSize: '11px', color: '#666', flexShrink: 0, minWidth: '80px' }}>
+              {entry.start}
+            </div>
+            <div style={{
+              height: '24px',
+              width: `${Math.max(entry.duration * 2, 4)}px`,
+              backgroundColor: getColor(entry.app),
+              borderRadius: '3px',
+              minWidth: '4px',
+              flexShrink: 0
+            }} title={`${entry.app} — ${entry.duration}s`} />
+            <div style={{ fontSize: '11px', color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {entry.app} {entry.duration > 10 ? `(${entry.duration}s)` : ''}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '15px', marginTop: '15px', flexWrap: 'wrap' }}>
+        {uniqueApps.map(app => (
+          <div key={app} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px' }}>
+            <div style={{ width: '12px', height: '12px', backgroundColor: generateColor(app), borderRadius: '2px' }} />
+            {app}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -238,6 +346,8 @@ export default function App() {
   const [liveData, setLiveData] = useState({});
   const [dailyUsage, setDailyUsage] = useState([]);
   const [deviceStatus, setDeviceStatus] = useState([]);
+  const [heatmapData, setHeatmapData] = useState([]);
+  const [timelineData, setTimelineData] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -248,6 +358,8 @@ export default function App() {
       axios.get(`${API}/api/live`).then(r => setLiveData(r.data));
       axios.get(`${API}/api/analytics/daily-usage`).then(r => setDailyUsage(r.data));
       axios.get(`${API}/api/devices/status`).then(r => setDeviceStatus(r.data));
+      axios.get(`${API}/api/analytics/heatmap`).then(r => setHeatmapData(r.data));
+      axios.get(`${API}/api/analytics/timeline`).then(r => setTimelineData(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -277,7 +389,7 @@ export default function App() {
         {activePage === 'resources' && <Resources data={resources} />}
         {activePage === 'devices' && <Devices data={deviceStatus} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
-        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} />}
       </div>
     </div>
   );

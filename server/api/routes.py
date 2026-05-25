@@ -199,3 +199,45 @@ def get_device_status(db: Session = Depends(get_db)):
         "last_seen": str(d.last_seen),
         "status": "Online" if d.last_seen and (now - d.last_seen).seconds < 120 else "Offline"
     } for d in devices]
+@router.get("/api/analytics/heatmap")
+def get_heatmap(db: Session = Depends(get_db)):
+    from sqlalchemy import func, cast, Date, extract
+    results = db.query(
+        cast(ActivityLog.start_time, Date).label("date"),
+        extract('hour', ActivityLog.start_time).label("hour"),
+        func.sum(ActivityLog.duration).label("total_duration")
+    ).group_by(
+        cast(ActivityLog.start_time, Date),
+        extract('hour', ActivityLog.start_time)
+    ).all()
+
+    return [{
+        "date": str(r.date),
+        "hour": int(r.hour),
+        "duration_minutes": round((r.total_duration or 0) / 60, 1)
+    } for r in results]
+@router.get("/api/analytics/timeline")
+def get_timeline(db: Session = Depends(get_db)):
+    from sqlalchemy import cast, Date
+    from datetime import date
+    today = date.today()
+    
+    results = db.query(
+        ActivityLog.app_name,
+        ActivityLog.window_title,
+        ActivityLog.start_time,
+        ActivityLog.end_time,
+        ActivityLog.duration,
+        ActivityLog.is_idle
+    ).filter(
+        cast(ActivityLog.start_time, Date) == today
+    ).order_by(ActivityLog.start_time).all()
+
+    return [{
+        "app": r.app_name.replace(".exe", ""),
+        "title": r.window_title,
+        "start": r.start_time.strftime("%H:%M:%S"),
+        "end": r.end_time.strftime("%H:%M:%S"),
+        "duration": r.duration,
+        "is_idle": r.is_idle
+    } for r in results]
