@@ -84,13 +84,23 @@ function Devices({ data }) {
           <tr style={{ backgroundColor: '#f0f0f0' }}>
             <th style={thStyle}>Device Name</th>
             <th style={thStyle}>Last Seen</th>
+            <th style={thStyle}>Status</th>
           </tr>
         </thead>
         <tbody>
           {data.map(d => (
             <tr key={d.id}>
               <td style={tdStyle}>{d.device_name}</td>
-              <td style={tdStyle}>{new Date(d.last_seen+'Z').toLocaleString()}</td>
+              <td style={tdStyle}>{new Date(d.last_seen + 'Z').toLocaleString()}</td>
+              <td style={tdStyle}>
+                <span style={{
+                  backgroundColor: d.status === 'Online' ? '#00C49F' : '#FF8042',
+                  color: 'white',
+                  padding: '3px 10px',
+                  borderRadius: '12px',
+                  fontSize: '12px'
+                }}>{d.status}</span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -133,6 +143,91 @@ function Resources({ data }) {
     </div>
   );
 }
+function LiveMonitoring({ data }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Current Application</h3>
+          <p style={cardValue}>{data.current_app || 'No data'}</p>
+          <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.window_title}</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Status</h3>
+          <p style={{ ...cardValue, color: data.is_idle ? '#FF8042' : '#00C49F' }}>
+            {data.is_idle ? 'Idle' : 'Active'}
+          </p>
+          <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '12px' }}>Last updated: {data.last_updated}</p>
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>CPU Usage</h3>
+          <p style={cardValue}>{data.cpu_usage}%</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Memory Usage</h3>
+          <p style={cardValue}>{data.memory_usage}%</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Upload</h3>
+          <p style={cardValue}>{data.upload_kb} <span style={{ fontSize: '16px' }}>KB/s</span></p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Download</h3>
+          <p style={cardValue}>{data.download_kb} <span style={{ fontSize: '16px' }}>KB/s</span></p>
+        </div>
+      </div>
+    </div>
+  );
+}
+function Analytics({ topApps, dailyUsage }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Application Usage Breakdown</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <PieChart>
+            <Pie data={topApps.map(d => ({ name: d.app_name.replace('.exe', ''), value: Math.round(d.total_duration / 60) }))} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+              {topApps.map((_, index) => (
+                <Cell key={index} fill={COLORS[index % COLORS.length]} />
+              ))}
+            </Pie>
+            <Tooltip />
+            <Legend />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Daily Usage (hours)</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={dailyUsage}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="hours" fill="#0088FE" name="Active Hours" />
+            <Bar dataKey="idle_hours" fill="#FF8042" name="Idle Hours" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Sessions Per Day</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <LineChart data={dailyUsage}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Line type="monotone" dataKey="sessions" stroke="#00C49F" dot={true} name="Sessions" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [overview, setOverview] = useState({});
@@ -140,6 +235,9 @@ export default function App() {
   const [devices, setDevices] = useState([]);
   const [activePage, setActivePage] = useState('overview');
   const [resources, setResources] = useState([]);
+  const [liveData, setLiveData] = useState({});
+  const [dailyUsage, setDailyUsage] = useState([]);
+  const [deviceStatus, setDeviceStatus] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -147,6 +245,9 @@ export default function App() {
       axios.get(`${API}/api/analytics/top-apps`).then(r => setTopApps(r.data));
       axios.get(`${API}/api/devices`).then(r => setDevices(r.data));
       axios.get(`${API}/api/analytics/resources`).then(r => setResources(r.data));
+      axios.get(`${API}/api/live`).then(r => setLiveData(r.data));
+      axios.get(`${API}/api/analytics/daily-usage`).then(r => setDailyUsage(r.data));
+      axios.get(`${API}/api/devices/status`).then(r => setDeviceStatus(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -157,7 +258,7 @@ export default function App() {
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       <div style={{ backgroundColor: '#1a1a2e', color: 'white', padding: '15px 30px', display: 'flex', alignItems: 'center', gap: '30px' }}>
         <h1 style={{ margin: 0, fontSize: '20px' }}>VAMS Dashboard</h1>
-        {['overview', 'analytics', 'resources', 'devices'].map(page => (
+        {['overview', 'live', 'analytics', 'resources', 'devices'].map(page => (
           <button key={page} onClick={() => setActivePage(page)} style={{
             background: activePage === page ? '#0088FE' : 'transparent',
             color: 'white', border: 'none', padding: '8px 16px',
@@ -173,9 +274,10 @@ export default function App() {
             <TopAppsBar data={topApps} />
           </>
         )}
-        {activePage === 'analytics' && <TopAppsPie data={topApps} />}
         {activePage === 'resources' && <Resources data={resources} />}
-        {activePage === 'devices' && <Devices data={devices} />}
+        {activePage === 'devices' && <Devices data={deviceStatus} />}
+        {activePage === 'live' && <LiveMonitoring data={liveData} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} />}
       </div>
     </div>
   );

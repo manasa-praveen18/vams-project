@@ -1,7 +1,8 @@
 import sys
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from sqlalchemy import Integer
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -9,7 +10,6 @@ from server.auth.jwt import create_access_token, get_current_device
 import uuid
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from fastapi import Request
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -153,3 +153,49 @@ def get_resources(db: Session = Depends(get_db)):
         "upload": round(r.upload_kb or 0, 1),
         "download": round(r.download_kb or 0, 1)
     } for r in results]
+@router.get("/api/live")
+def get_live_status(db: Session = Depends(get_db)):
+    latest_log = db.query(ActivityLog).order_by(ActivityLog.end_time.desc()).first()
+    
+    if not latest_log:
+        return {"status": "no data"}
+    
+    return {
+        "current_app": latest_log.app_name.replace(".exe", ""),
+        "window_title": latest_log.window_title,
+        "is_idle": latest_log.is_idle,
+        "cpu_usage": latest_log.cpu_usage,
+        "memory_usage": latest_log.memory_usage,
+        "disk_usage": latest_log.disk_usage,
+        "upload_kb": latest_log.upload_kb,
+        "download_kb": latest_log.download_kb,
+        "last_updated": latest_log.end_time.strftime("%H:%M:%S")
+    }
+@router.get("/api/analytics/daily-usage")
+def get_daily_usage(db: Session = Depends(get_db)):
+    from sqlalchemy import func, cast, Date
+    results = db.query(
+        cast(ActivityLog.start_time, Date).label("date"),
+        func.sum(ActivityLog.duration).label("total_duration"),
+        func.count(ActivityLog.id).label("total_sessions"),
+        func.sum(ActivityLog.duration.op('*')(ActivityLog.is_idle.cast(Integer))).label("idle_duration")
+    ).group_by(cast(ActivityLog.start_time, Date)).order_by(cast(ActivityLog.start_time, Date)).all()
+
+    return [{
+        "date": str(r.date),
+        "hours": round((r.total_duration or 0) / 3600, 2),
+        "sessions": r.total_sessions,
+        "idle_hours": round((r.idle_duration or 0) / 3600, 2)
+    } for r in results]
+@router.get("/api/devices/status")
+def get_device_status(db: Session = Depends(get_db)):
+    from datetime import timedelta
+    devices = db.query(Device).all()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    
+    return [{
+        "id": str(d.id),
+        "device_name": d.device_name,
+        "last_seen": str(d.last_seen),
+        "status": "Online" if d.last_seen and (now - d.last_seen).seconds < 120 else "Offline"
+    } for d in devices]
