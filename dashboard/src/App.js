@@ -75,36 +75,59 @@ function TopAppsPie({ data }) {
   );
 }
 
-function Devices({ data }) {
+function Devices({ data, sessionHistory }) {
   return (
-    <div style={cardStyle}>
-      <h3 style={cardTitle}>Registered Devices</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ backgroundColor: '#f0f0f0' }}>
-            <th style={thStyle}>Device Name</th>
-            <th style={thStyle}>Last Seen</th>
-            <th style={thStyle}>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map(d => (
-            <tr key={d.id}>
-              <td style={tdStyle}>{d.device_name}</td>
-              <td style={tdStyle}>{new Date(d.last_seen + 'Z').toLocaleString()}</td>
-              <td style={tdStyle}>
-                <span style={{
-                  backgroundColor: d.status === 'Online' ? '#00C49F' : '#FF8042',
-                  color: 'white',
-                  padding: '3px 10px',
-                  borderRadius: '12px',
-                  fontSize: '12px'
-                }}>{d.status}</span>
-              </td>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Registered Devices</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f0f0f0' }}>
+              <th style={thStyle}>Device Name</th>
+              <th style={thStyle}>Last Seen</th>
+              <th style={thStyle}>Status</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.map(d => (
+              <tr key={d.id}>
+                <td style={tdStyle}>{d.device_name}</td>
+                <td style={tdStyle}>{new Date(d.last_seen + 'Z').toLocaleString()}</td>
+                <td style={tdStyle}>
+                  <span style={{
+                    backgroundColor: d.status === 'Online' ? '#00C49F' : '#FF8042',
+                    color: 'white',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    fontSize: '12px'
+                  }}>{d.status}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Login/Logout History</h3>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f0f0f0' }}>
+              <th style={thStyle}>Login Time</th>
+              <th style={thStyle}>Logout Time</th>
+              <th style={thStyle}>Duration</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sessionHistory.map((s, index) => (
+              <tr key={index}>
+                <td style={tdStyle}>{new Date(s.login_time + 'Z').toLocaleString()}</td>
+                <td style={tdStyle}>{s.logout_time === 'Still active' ? <span style={{ color: '#00C49F' }}>Still active</span> : new Date(s.logout_time + 'Z').toLocaleString()}</td>
+                <td style={tdStyle}>{s.duration_minutes ? `${s.duration_minutes} min` : '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -388,6 +411,7 @@ export default function App() {
   const [heatmapData, setHeatmapData] = useState([]);
   const [timelineData, setTimelineData] = useState([]);
   const [idleReport, setIdleReport] = useState({});
+  const [sessionHistory, setSessionHistory] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -401,6 +425,7 @@ export default function App() {
       axios.get(`${API}/api/analytics/heatmap`).then(r => setHeatmapData(r.data));
       axios.get(`${API}/api/analytics/timeline`).then(r => setTimelineData(r.data));
       axios.get(`${API}/api/analytics/idle-report`).then(r => setIdleReport(r.data));
+      axios.get(`${API}/api/session/history`).then(r => setSessionHistory(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -428,7 +453,7 @@ export default function App() {
           </>
         )}
         {activePage === 'resources' && <Resources data={resources} />}
-        {activePage === 'devices' && <Devices data={deviceStatus} />}
+        {activePage === 'devices' && <Devices data={deviceStatus} sessionHistory={sessionHistory} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
         {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} />}
         {activePage === 'idle' && <IdleReport data={idleReport} />}

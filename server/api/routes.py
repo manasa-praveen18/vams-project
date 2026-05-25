@@ -266,3 +266,35 @@ def get_idle_report(db: Session = Depends(get_db)):
             "idle_sessions": r.idle_sessions
         } for r in daily_idle]
     }
+@router.post("/api/session/login")
+def session_login(device_id: str, db: Session = Depends(get_db), current_device: dict = Depends(get_current_device)):
+    from server.database.models import SessionLog
+    session = SessionLog(
+        device_id=uuid.UUID(device_id),
+        login_time=datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return {"session_id": str(session.id), "login_time": str(session.login_time)}
+
+@router.post("/api/session/logout")
+def session_logout(session_id: str, db: Session = Depends(get_db), current_device: dict = Depends(get_current_device)):
+    from server.database.models import SessionLog
+    session = db.query(SessionLog).filter(SessionLog.id == uuid.UUID(session_id)).first()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.logout_time = datetime.now(timezone.utc).replace(tzinfo=None)
+    session.duration_seconds = int((session.logout_time - session.login_time).total_seconds())
+    db.commit()
+    return {"session_id": session_id, "duration_seconds": session.duration_seconds}
+
+@router.get("/api/session/history")
+def session_history(db: Session = Depends(get_db)):
+    from server.database.models import SessionLog
+    sessions = db.query(SessionLog).order_by(SessionLog.login_time.desc()).limit(20).all()
+    return [{
+        "login_time": str(s.login_time),
+        "logout_time": str(s.logout_time) if s.logout_time else "Still active",
+        "duration_minutes": round(s.duration_seconds / 60, 1) if s.duration_seconds else None
+    } for s in sessions]
