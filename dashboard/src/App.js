@@ -204,7 +204,7 @@ function LiveMonitoring({ data }) {
     </div>
   );
 }
-function Analytics({ topApps, dailyUsage, heatmapData, timelineData }) {
+function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={cardStyle}>
@@ -249,6 +249,7 @@ function Analytics({ topApps, dailyUsage, heatmapData, timelineData }) {
         </ResponsiveContainer>
         <Heatmap data={heatmapData} />
         <Timeline data={timelineData} />
+        <WeeklyTrends data={weeklyTrends} />
       </div>
     </div>
   );
@@ -398,6 +399,22 @@ function IdleReport({ data }) {
     </div>
   );
 }
+function WeeklyTrends({ data }) {
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitle}>Weekly Trends (hours)</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <BarChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="week" />
+          <YAxis />
+          <Tooltip />
+          <Bar dataKey="hours" fill="#0088FE" name="Hours" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 export default function App() {
   const [overview, setOverview] = useState({});
@@ -412,6 +429,7 @@ export default function App() {
   const [timelineData, setTimelineData] = useState([]);
   const [idleReport, setIdleReport] = useState({});
   const [sessionHistory, setSessionHistory] = useState([]);
+  const [weeklyTrends, setWeeklyTrends] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -426,6 +444,7 @@ export default function App() {
       axios.get(`${API}/api/analytics/timeline`).then(r => setTimelineData(r.data));
       axios.get(`${API}/api/analytics/idle-report`).then(r => setIdleReport(r.data));
       axios.get(`${API}/api/session/history`).then(r => setSessionHistory(r.data));
+      axios.get(`${API}/api/analytics/weekly-trends`).then(r => setWeeklyTrends(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -455,7 +474,7 @@ export default function App() {
         {activePage === 'resources' && <Resources data={resources} />}
         {activePage === 'devices' && <Devices data={deviceStatus} sessionHistory={sessionHistory} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
-        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} />}
         {activePage === 'idle' && <IdleReport data={idleReport} />}
       </div>
     </div>

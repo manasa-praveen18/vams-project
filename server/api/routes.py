@@ -298,3 +298,28 @@ def session_history(db: Session = Depends(get_db)):
         "logout_time": str(s.logout_time) if s.logout_time else "Still active",
         "duration_minutes": round(s.duration_seconds / 60, 1) if s.duration_seconds else None
     } for s in sessions]
+@router.get("/api/analytics/weekly-trends")
+def get_weekly_trends(db: Session = Depends(get_db)):
+    from sqlalchemy import func, cast, Date, extract
+    from datetime import timedelta, date
+    
+    results = db.query(
+        extract('year', ActivityLog.start_time).label("year"),
+        extract('week', ActivityLog.start_time).label("week"),
+        func.min(cast(ActivityLog.start_time, Date)).label("week_start"),
+        func.max(cast(ActivityLog.start_time, Date)).label("week_end"),
+        func.sum(ActivityLog.duration).label("total_duration"),
+        func.count(ActivityLog.id).label("total_sessions")
+    ).group_by(
+        extract('year', ActivityLog.start_time),
+        extract('week', ActivityLog.start_time)
+    ).order_by(
+        extract('year', ActivityLog.start_time),
+        extract('week', ActivityLog.start_time)
+    ).all()
+
+    return [{
+        "week": f"{r.week_start.strftime('%d %b')} - {r.week_end.strftime('%d %b')}",
+        "hours": round((r.total_duration or 0) / 3600, 2),
+        "sessions": r.total_sessions
+    } for r in results]
