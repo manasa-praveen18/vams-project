@@ -336,6 +336,45 @@ function Timeline({ data }) {
     </div>
   );
 }
+function IdleReport({ data }) {
+  if (!data.daily) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Total Hours</h3>
+          <p style={cardValue}>{data.total_hours}h</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Active Hours</h3>
+          <p style={{ ...cardValue, color: '#00C49F' }}>{data.active_hours}h</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Idle Hours</h3>
+          <p style={{ ...cardValue, color: '#FF8042' }}>{data.idle_hours}h</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Idle Percentage</h3>
+          <p style={{ ...cardValue, color: '#FF8042' }}>{data.idle_percentage}%</p>
+        </div>
+      </div>
+      <div style={cardStyle}>
+        <h3 style={cardTitle}>Daily Idle Sessions</h3>
+        <ResponsiveContainer width="100%" height={250}>
+          <BarChart data={data.daily}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="date" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            <Bar dataKey="total_hours" fill="#00C49F" name="Total Hours" />
+            <Bar dataKey="idle_sessions" fill="#FF8042" name="Idle Sessions" />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [overview, setOverview] = useState({});
@@ -348,6 +387,7 @@ export default function App() {
   const [deviceStatus, setDeviceStatus] = useState([]);
   const [heatmapData, setHeatmapData] = useState([]);
   const [timelineData, setTimelineData] = useState([]);
+  const [idleReport, setIdleReport] = useState({});
 
   useEffect(() => {
     const fetchData = () => {
@@ -360,6 +400,7 @@ export default function App() {
       axios.get(`${API}/api/devices/status`).then(r => setDeviceStatus(r.data));
       axios.get(`${API}/api/analytics/heatmap`).then(r => setHeatmapData(r.data));
       axios.get(`${API}/api/analytics/timeline`).then(r => setTimelineData(r.data));
+      axios.get(`${API}/api/analytics/idle-report`).then(r => setIdleReport(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -370,7 +411,7 @@ export default function App() {
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       <div style={{ backgroundColor: '#1a1a2e', color: 'white', padding: '15px 30px', display: 'flex', alignItems: 'center', gap: '30px' }}>
         <h1 style={{ margin: 0, fontSize: '20px' }}>VAMS Dashboard</h1>
-        {['overview', 'live', 'analytics', 'resources', 'devices'].map(page => (
+        {['overview', 'live', 'analytics', 'resources', 'idle', 'devices'].map(page => (
           <button key={page} onClick={() => setActivePage(page)} style={{
             background: activePage === page ? '#0088FE' : 'transparent',
             color: 'white', border: 'none', padding: '8px 16px',
@@ -390,6 +431,7 @@ export default function App() {
         {activePage === 'devices' && <Devices data={deviceStatus} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
         {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} />}
+        {activePage === 'idle' && <IdleReport data={idleReport} />}
       </div>
     </div>
   );

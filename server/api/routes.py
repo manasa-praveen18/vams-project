@@ -241,3 +241,28 @@ def get_timeline(db: Session = Depends(get_db)):
         "duration": r.duration,
         "is_idle": r.is_idle
     } for r in results]
+@router.get("/api/analytics/idle-report")
+def get_idle_report(db: Session = Depends(get_db)):
+    from sqlalchemy import func, cast, Date
+    
+    total_duration = db.query(func.sum(ActivityLog.duration)).scalar() or 0
+    idle_duration = db.query(func.sum(ActivityLog.duration)).filter(ActivityLog.is_idle == True).scalar() or 0
+    active_duration = total_duration - idle_duration
+    
+    daily_idle = db.query(
+        cast(ActivityLog.start_time, Date).label("date"),
+        func.sum(ActivityLog.duration).label("total"),
+        func.count(ActivityLog.id).filter(ActivityLog.is_idle == True).label("idle_sessions")
+    ).group_by(cast(ActivityLog.start_time, Date)).order_by(cast(ActivityLog.start_time, Date)).all()
+
+    return {
+        "total_hours": round(total_duration / 3600, 2),
+        "active_hours": round(active_duration / 3600, 2),
+        "idle_hours": round(idle_duration / 3600, 2),
+        "idle_percentage": round((idle_duration / total_duration * 100) if total_duration > 0 else 0, 1),
+        "daily": [{
+            "date": str(r.date),
+            "total_hours": round((r.total or 0) / 3600, 2),
+            "idle_sessions": r.idle_sessions
+        } for r in daily_idle]
+    }
