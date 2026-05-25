@@ -105,22 +105,29 @@ def health_check():
     return {"status": "ok"}
 
 @router.get("/api/analytics/top-apps")
-def get_top_apps(db: Session = Depends(get_db)):
+def get_top_apps(device_id: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
-    results = db.query(
+    query = db.query(
         ActivityLog.app_name,
         func.sum(ActivityLog.duration).label("total_duration")
-    ).group_by(ActivityLog.app_name).order_by(func.sum(ActivityLog.duration).desc()).limit(10).all()
+    )
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
     
+    results = query.group_by(ActivityLog.app_name).order_by(func.sum(ActivityLog.duration).desc()).limit(10).all()
     return [{"app_name": r.app_name, "total_duration": r.total_duration} for r in results]
 
 @router.get("/api/analytics/overview")
-def get_overview(db: Session = Depends(get_db)):
+def get_overview(device_id: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
-    total_logs = db.query(func.count(ActivityLog.id)).scalar()
-    total_duration = db.query(func.sum(ActivityLog.duration)).scalar() or 0
+    query = db.query(ActivityLog)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+    
+    total_logs = query.count()
+    total_duration = query.with_entities(func.sum(ActivityLog.duration)).scalar() or 0
     total_devices = db.query(func.count(Device.id)).scalar()
-    idle_count = db.query(func.count(ActivityLog.id)).filter(ActivityLog.is_idle == True).scalar()
+    idle_count = query.filter(ActivityLog.is_idle == True).count()
     
     return {
         "total_logs": total_logs,
@@ -135,15 +142,12 @@ def get_devices(db: Session = Depends(get_db)):
     return [{"id": str(d.id), "device_name": d.device_name, "last_seen": str(d.last_seen)} for d in devices]
 
 @router.get("/api/analytics/resources")
-def get_resources(db: Session = Depends(get_db)):
-    results = db.query(
-        ActivityLog.start_time,
-        ActivityLog.cpu_usage,
-        ActivityLog.memory_usage,
-        ActivityLog.disk_usage,
-        ActivityLog.upload_kb,
-        ActivityLog.download_kb
-    ).order_by(ActivityLog.start_time.desc()).limit(50).all()
+def get_resources(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(ActivityLog)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+    
+    results = query.order_by(ActivityLog.end_time.desc()).limit(50).all()
 
     return [{
         "time": r.start_time.strftime("%H:%M"),
@@ -172,20 +176,23 @@ def get_live_status(db: Session = Depends(get_db)):
         "last_updated": latest_log.end_time.strftime("%H:%M:%S")
     }
 @router.get("/api/analytics/daily-usage")
-def get_daily_usage(db: Session = Depends(get_db)):
+def get_daily_usage(device_id: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func, cast, Date
-    results = db.query(
+    query = db.query(ActivityLog)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+    
+    results = query.with_entities(
         cast(ActivityLog.start_time, Date).label("date"),
         func.sum(ActivityLog.duration).label("total_duration"),
-        func.count(ActivityLog.id).label("total_sessions"),
-        func.sum(ActivityLog.duration.op('*')(ActivityLog.is_idle.cast(Integer))).label("idle_duration")
+        func.count(ActivityLog.id).label("total_sessions")
     ).group_by(cast(ActivityLog.start_time, Date)).order_by(cast(ActivityLog.start_time, Date)).all()
 
     return [{
         "date": str(r.date),
         "hours": round((r.total_duration or 0) / 3600, 2),
         "sessions": r.total_sessions,
-        "idle_hours": round((r.idle_duration or 0) / 3600, 2)
+        "idle_hours": 0
     } for r in results]
 @router.get("/api/devices/status")
 def get_device_status(db: Session = Depends(get_db)):
@@ -200,9 +207,13 @@ def get_device_status(db: Session = Depends(get_db)):
         "status": "Online" if d.last_seen and (now - d.last_seen).seconds < 120 else "Offline"
     } for d in devices]
 @router.get("/api/analytics/heatmap")
-def get_heatmap(db: Session = Depends(get_db)):
+def get_heatmap(device_id: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func, cast, Date, extract
-    results = db.query(
+    query = db.query(ActivityLog)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+    
+    results = query.with_entities(
         cast(ActivityLog.start_time, Date).label("date"),
         extract('hour', ActivityLog.start_time).label("hour"),
         func.sum(ActivityLog.duration).label("total_duration")
@@ -323,3 +334,12 @@ def get_weekly_trends(db: Session = Depends(get_db)):
         "hours": round((r.total_duration or 0) / 3600, 2),
         "sessions": r.total_sessions
     } for r in results]
+@router.get("/api/users")
+def get_users(db: Session = Depends(get_db)):
+    users = db.query(User).all()
+    return [{
+        "id": str(u.id),
+        "username": u.username,
+        "department": u.department,
+        "created_at": str(u.created_at)
+    } for u in users]

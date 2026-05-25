@@ -430,21 +430,24 @@ export default function App() {
   const [idleReport, setIdleReport] = useState({});
   const [sessionHistory, setSessionHistory] = useState([]);
   const [weeklyTrends, setWeeklyTrends] = useState([]);
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [users, setUsers] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
-      axios.get(`${API}/api/analytics/overview`).then(r => setOverview(r.data));
-      axios.get(`${API}/api/analytics/top-apps`).then(r => setTopApps(r.data));
-      axios.get(`${API}/api/devices`).then(r => setDevices(r.data));
-      axios.get(`${API}/api/analytics/resources`).then(r => setResources(r.data));
-      axios.get(`${API}/api/live`).then(r => setLiveData(r.data));
-      axios.get(`${API}/api/analytics/daily-usage`).then(r => setDailyUsage(r.data));
-      axios.get(`${API}/api/devices/status`).then(r => setDeviceStatus(r.data));
-      axios.get(`${API}/api/analytics/heatmap`).then(r => setHeatmapData(r.data));
-      axios.get(`${API}/api/analytics/timeline`).then(r => setTimelineData(r.data));
-      axios.get(`${API}/api/analytics/idle-report`).then(r => setIdleReport(r.data));
-      axios.get(`${API}/api/session/history`).then(r => setSessionHistory(r.data));
-      axios.get(`${API}/api/analytics/weekly-trends`).then(r => setWeeklyTrends(r.data));
+      const deviceParam = selectedDevice ? `?device_id=${selectedDevice}` : '';
+      axios.get(`${API}/api/analytics/overview${deviceParam}`).then(r => setOverview(r.data));
+      axios.get(`${API}/api/analytics/top-apps${deviceParam}`).then(r => setTopApps(r.data));
+      axios.get(`${API}/api/analytics/resources${deviceParam}`).then(r => setResources(r.data));
+      axios.get(`${API}/api/analytics/daily-usage${deviceParam}`).then(r => setDailyUsage(r.data));
+      axios.get(`${API}/api/analytics/heatmap${deviceParam}`).then(r => setHeatmapData(r.data));
+      axios.get(`${API}/api/analytics/weekly-trends${deviceParam}`).then(r => setWeeklyTrends(r.data));
+      axios.get(`${API}/api/analytics/timeline${deviceParam}`).then(r => setTimelineData(r.data));
+      axios.get(`${API}/api/analytics/idle-report${deviceParam}`).then(r => setIdleReport(r.data));
+      axios.get(`${API}/api/live${deviceParam}`).then(r => setLiveData(r.data));
+      axios.get(`${API}/api/devices/status${deviceParam}`).then(r => setDeviceStatus(r.data));
+      axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
+      axios.get(`${API}/api/users`).then(r => setUsers(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -462,6 +465,24 @@ export default function App() {
             borderRadius: '4px', cursor: 'pointer', textTransform: 'capitalize'
           }}>{page}</button>
         ))}
+        <select
+        value={selectedDevice}
+        onChange={e => setSelectedDevice(e.target.value)}
+        style={{
+          marginLeft: 'auto',
+          background: '#2a2a4a',
+          color: 'white',
+          border: '1px solid #444',
+          padding: '6px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer'
+        }}
+        >
+          <option value="">All Devices</option>
+          {deviceStatus.map(d => (
+            <option key={d.id} value={d.id}>{d.device_name}</option>
+            ))}
+        </select>
       </div>
 
       <div style={{ padding: '30px' }}>
