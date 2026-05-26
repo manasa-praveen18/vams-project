@@ -33,9 +33,13 @@ def start_monitoring():
     last_title = None
     start_time = time.time()
     start_timestamp = datetime.now().isoformat()
+    was_idle = False
 
     while True:
         app, title = get_active_window()
+
+        if is_idle():
+            was_idle = True
 
         if app != last_app:
             if last_app is not None:
@@ -53,18 +57,19 @@ def start_monitoring():
                     start_time=start_timestamp,
                     end_time=end_timestamp,
                     duration=duration,
-                    is_idle=is_idle(),
+                    is_idle=was_idle,
                     cpu_usage=cpu,
                     memory_usage=mem['percent'],
                     disk_usage=disk['percent'],
                     upload_kb=net['upload_kb'],
                     download_kb=net['download_kb']
                 )
-                logger.info(f"Saved: {last_app} | Duration: {duration}s")
+                logger.info(f"Saved: {last_app} | Duration: {duration}s | Idle: {was_idle}")
 
             last_app = app
             last_title = title
             start_time = time.time()
             start_timestamp = datetime.now().isoformat()
+            was_idle = False
 
         time.sleep(POLL_INTERVAL)
