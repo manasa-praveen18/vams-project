@@ -8,22 +8,44 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'
 
 function Overview({ data }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>Total Logs</h3>
-        <p style={cardValue}>{data.total_logs}</p>
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px', marginBottom: '30px' }}>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Active Users Today</h3>
+          <p style={cardValue}>{data.active_users_today}</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Total Apps Tracked</h3>
+          <p style={cardValue}>{data.total_apps}</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Hours Tracked</h3>
+          <p style={cardValue}>{data.total_duration_hours}h</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Devices</h3>
+          <p style={cardValue}>{data.total_devices}</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Idle Sessions</h3>
+          <p style={cardValue}>{data.idle_count}</p>
+        </div>
       </div>
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>Hours Tracked</h3>
-        <p style={cardValue}>{data.total_duration_hours}h</p>
-      </div>
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>Devices</h3>
-        <p style={cardValue}>{data.total_devices}</p>
-      </div>
-      <div style={cardStyle}>
-        <h3 style={cardTitle}>Idle Sessions</h3>
-        <p style={cardValue}>{data.idle_count}</p>
+      <div style={{ marginTop: '20px' }}>
+        <a 
+          href={`${API}/api/reports/activity-csv`}
+          download="activity_report.csv"
+          style={{
+            backgroundColor: '#0088FE',
+            color: 'white',
+            padding: '10px 20px',
+            borderRadius: '4px',
+            textDecoration: 'none',
+            fontSize: '14px'
+          }}
+        >
+          Download Activity Report (CSV)
+        </a>
       </div>
     </div>
   );
@@ -169,11 +191,16 @@ function Resources({ data }) {
 function LiveMonitoring({ data }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
         <div style={cardStyle}>
           <h3 style={cardTitle}>Current Application</h3>
           <p style={cardValue}>{data.current_app || 'No data'}</p>
           <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '12px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{data.window_title}</p>
+        </div>
+        <div style={cardStyle}>
+          <h3 style={cardTitle}>Current User</h3>
+          <p style={cardValue}>{data.username || 'Unknown'}</p>
+          <p style={{ margin: '5px 0 0 0', color: '#666', fontSize: '12px' }}>{data.device_name}</p>
         </div>
         <div style={cardStyle}>
           <h3 style={cardTitle}>Status</h3>

@@ -10,6 +10,9 @@ from server.auth.jwt import create_access_token, get_current_device
 import uuid
 from slowapi import Limiter
 from slowapi.util import get_remote_address
+from fastapi.responses import StreamingResponse
+import csv
+import io
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -119,7 +122,9 @@ def get_top_apps(device_id: Optional[str] = None, db: Session = Depends(get_db))
 
 @router.get("/api/analytics/overview")
 def get_overview(device_id: Optional[str] = None, db: Session = Depends(get_db)):
-    from sqlalchemy import func
+    from sqlalchemy import func, cast, Date
+    from datetime import date
+    
     query = db.query(ActivityLog)
     if device_id:
         query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
@@ -129,12 +134,23 @@ def get_overview(device_id: Optional[str] = None, db: Session = Depends(get_db))
     total_devices = db.query(func.count(Device.id)).scalar()
     idle_count = query.filter(ActivityLog.is_idle == True).count()
     
+    # active users today
+    today = date.today()
+    active_users_today = db.query(func.count(func.distinct(Device.user_id))).join(
+        ActivityLog, ActivityLog.device_id == Device.id
+    ).filter(
+        cast(ActivityLog.start_time, Date) == today
+    ).scalar() or 0
+    total_apps = query.with_entities(func.count(func.distinct(ActivityLog.app_name))).scalar() or 0
+    
     return {
-        "total_logs": total_logs,
-        "total_duration_hours": round(total_duration / 3600, 2),
-        "total_devices": total_devices,
-        "idle_count": idle_count
-    }
+    "total_logs": total_logs,
+    "total_duration_hours": round(total_duration / 3600, 2),
+    "total_devices": total_devices,
+    "idle_count": idle_count,
+    "active_users_today": active_users_today,
+    "total_apps": total_apps
+}
 
 @router.get("/api/devices")
 def get_devices(db: Session = Depends(get_db)):
@@ -164,6 +180,9 @@ def get_live_status(db: Session = Depends(get_db)):
     if not latest_log:
         return {"status": "no data"}
     
+    device = db.query(Device).filter(Device.id == latest_log.device_id).first()
+    user = db.query(User).filter(User.id == device.user_id).first() if device else None
+    
     return {
         "current_app": latest_log.app_name.replace(".exe", ""),
         "window_title": latest_log.window_title,
@@ -173,7 +192,9 @@ def get_live_status(db: Session = Depends(get_db)):
         "disk_usage": latest_log.disk_usage,
         "upload_kb": latest_log.upload_kb,
         "download_kb": latest_log.download_kb,
-        "last_updated": latest_log.end_time.strftime("%H:%M:%S")
+        "last_updated": latest_log.end_time.strftime("%H:%M:%S"),
+        "username": user.username if user else "Unknown",
+        "device_name": device.device_name if device else "Unknown"
     }
 @router.get("/api/analytics/daily-usage")
 def get_daily_usage(device_id: Optional[str] = None, db: Session = Depends(get_db)):
@@ -343,3 +364,38 @@ def get_users(db: Session = Depends(get_db)):
         "department": u.department,
         "created_at": str(u.created_at)
     } for u in users]
+
+@router.get("/api/reports/activity-csv")
+def download_activity_report(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(ActivityLog)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+    
+    logs = query.order_by(ActivityLog.start_time.desc()).all()
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    writer.writerow(['App Name', 'Window Title', 'Start Time', 'End Time', 'Duration (seconds)', 'Is Idle', 'CPU %', 'Memory %', 'Disk %', 'Upload KB/s', 'Download KB/s'])
+    
+    for log in logs:
+        writer.writerow([
+            log.app_name,
+            log.window_title,
+            log.start_time,
+            log.end_time,
+            log.duration,
+            log.is_idle,
+            log.cpu_usage,
+            log.memory_usage,
+            log.disk_usage,
+            log.upload_kb,
+            log.download_kb
+        ])
+    
+    output.seek(0)
+    return StreamingResponse(
+        io.BytesIO(output.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=activity_report.csv"}
+    )
