@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import Integer
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from server.auth.jwt import create_access_token, get_current_device
 import uuid
 from slowapi import Limiter
@@ -108,15 +108,30 @@ def health_check():
     return {"status": "ok"}
 
 @router.get("/api/analytics/top-apps")
-def get_top_apps(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_top_apps(device_id: Optional[str] = None, period: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
+    from datetime import datetime, timedelta
+
     query = db.query(
         ActivityLog.app_name,
         func.sum(ActivityLog.duration).label("total_duration")
     )
+
     if device_id:
         query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
-    
+
+    # Filter by period
+    if period == "day":
+        cutoff = datetime.now() - timedelta(days=1)
+        query = query.filter(ActivityLog.start_time >= cutoff)
+    elif period == "week":
+        cutoff = datetime.now() - timedelta(weeks=1)
+        query = query.filter(ActivityLog.start_time >= cutoff)
+    elif period == "month":
+        cutoff = datetime.now() - timedelta(days=30)
+        query = query.filter(ActivityLog.start_time >= cutoff)
+    # if period is None or anything else, no date filter (all time)
+
     results = query.group_by(ActivityLog.app_name).order_by(func.sum(ActivityLog.duration).desc()).limit(10).all()
     return [{"app_name": r.app_name, "total_duration": r.total_duration} for r in results]
 
@@ -202,18 +217,19 @@ def get_daily_usage(device_id: Optional[str] = None, db: Session = Depends(get_d
     query = db.query(ActivityLog)
     if device_id:
         query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
-    
+
     results = query.with_entities(
         cast(ActivityLog.start_time, Date).label("date"),
         func.sum(ActivityLog.duration).label("total_duration"),
-        func.count(ActivityLog.id).label("total_sessions")
+        func.count(ActivityLog.id).label("total_sessions"),
+        func.sum(ActivityLog.duration).filter(ActivityLog.is_idle == True).label("idle_duration")
     ).group_by(cast(ActivityLog.start_time, Date)).order_by(cast(ActivityLog.start_time, Date)).all()
 
     return [{
         "date": str(r.date),
         "hours": round((r.total_duration or 0) / 3600, 2),
         "sessions": r.total_sessions,
-        "idle_hours": 0
+        "idle_hours": round((r.idle_duration or 0) / 3600, 2)
     } for r in results]
 @router.get("/api/devices/status")
 def get_device_status(db: Session = Depends(get_db)):
@@ -399,3 +415,85 @@ def download_activity_report(device_id: Optional[str] = None, db: Session = Depe
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=activity_report.csv"}
     )
+@router.get("/api/analytics/resource-alerts")
+def get_resource_alerts(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    now = datetime.now()
+    one_hour_ago = now - timedelta(hours=1)
+    one_day_ago = now - timedelta(hours=24)
+
+    def base_query(start):
+        q = db.query(ActivityLog).filter(ActivityLog.start_time >= start)
+        if device_id:
+            q = q.filter(ActivityLog.device_id == uuid.UUID(device_id))
+        return q
+
+    # Get averages over last 24 hours
+    avg_result = base_query(one_day_ago).with_entities(
+        func.avg(ActivityLog.cpu_usage).label("avg_cpu"),
+        func.avg(ActivityLog.memory_usage).label("avg_memory"),
+        func.avg(ActivityLog.disk_usage).label("avg_disk")
+    ).first()
+
+    avg_cpu = avg_result.avg_cpu or 0
+    avg_memory = avg_result.avg_memory or 0
+    avg_disk = avg_result.avg_disk or 0
+
+    # Get std deviation over last 24 hours
+    std_result = base_query(one_day_ago).with_entities(
+        func.stddev(ActivityLog.cpu_usage).label("std_cpu"),
+        func.stddev(ActivityLog.memory_usage).label("std_memory"),
+        func.stddev(ActivityLog.disk_usage).label("std_disk")
+    ).first()
+
+    std_cpu = std_result.std_cpu or 0
+    std_memory = std_result.std_memory or 0
+    std_disk = std_result.std_disk or 0
+
+    # Threshold = average + 3 standard deviations, capped at 90%
+    cpu_threshold = min(avg_cpu + 3 * std_cpu, 90)
+    memory_threshold = min(avg_memory + 3 * std_memory, 90)
+    disk_threshold = min(avg_disk + 3 * std_disk, 90)
+
+    # Check last hour for spikes
+    recent_logs = base_query(one_hour_ago).all()
+
+    alerts = []
+    for log in recent_logs:
+        if log.cpu_usage and log.cpu_usage > cpu_threshold:
+            alerts.append({
+                "type": "CPU",
+                "value": round(log.cpu_usage, 1),
+                "threshold": round(cpu_threshold, 1),
+                "time": log.start_time.strftime("%H:%M:%S"),
+                "app": log.app_name
+            })
+        if log.memory_usage and log.memory_usage > memory_threshold:
+            alerts.append({
+                "type": "Memory",
+                "value": round(log.memory_usage, 1),
+                "threshold": round(memory_threshold, 1),
+                "time": log.start_time.strftime("%H:%M:%S"),
+                "app": log.app_name
+            })
+        if log.disk_usage and log.disk_usage > disk_threshold:
+            alerts.append({
+                "type": "Disk",
+                "value": round(log.disk_usage, 1),
+                "threshold": round(disk_threshold, 1),
+                "time": log.start_time.strftime("%H:%M:%S"),
+                "app": log.app_name
+            })
+    
+    seen = {}
+    for a in alerts:
+        key = (a["type"], a["app"])
+        if key not in seen or a["value"] > seen[key]["value"]:
+            seen[key] = a
+
+    alerts = list(seen.values())
+
+    alerts.sort(key=lambda x: x["time"], reverse=True)
+    return alerts[:10]

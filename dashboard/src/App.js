@@ -6,6 +6,35 @@ const API = 'http://localhost:8000';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658', '#ff7f7f', '#a4de6c', '#d0ed57'];
 
+function ResourceAlerts({ alerts }) {
+  if (!alerts || alerts.length === 0) return (
+    <div style={{ ...cardStyle, borderLeft: '4px solid #00C49F', marginBottom: '20px' }}>
+      <p style={{ margin: 0, color: '#00C49F', fontWeight: 'bold' }}>✓ No resource spikes in the last hour</p>
+    </div>
+  );
+
+  const color = (type) => type === 'CPU' ? '#0088FE' : type === 'Memory' ? '#FF8042' : '#ffcc00';
+
+  return (
+    <div style={{ ...cardStyle, marginBottom: '20px', borderLeft: '4px solid #FF4444' }}>
+      <h3 style={{ ...cardTitle, color: '#FF4444', marginBottom: '12px' }}>⚠ Resource Spike Alerts (Last Hour)</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {alerts.map((a, i) => (
+          <div key={i} style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            backgroundColor: '#fff8f8', padding: '8px 12px', borderRadius: '6px',
+            borderLeft: `3px solid ${color(a.type)}`
+          }}>
+            <span style={{ fontWeight: 'bold', color: color(a.type) }}>{a.type}</span>
+            <span>{a.app.replace('.exe', '')}</span>
+            <span style={{ color: '#FF4444', fontWeight: 'bold' }}>{a.value}% (threshold: {a.threshold}%)</span>
+            <span style={{ color: '#999', fontSize: '12px' }}>{a.time}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 function Overview({ data }) {
   return (
     <div>
@@ -51,7 +80,7 @@ function Overview({ data }) {
   );
 }
 
-function TopAppsBar({ data }) {
+function TopAppsBar({ data, period, onPeriodChange }) {
   const formatted = data.map(d => ({
     name: d.app_name.replace('.exe', ''),
     minutes: Math.round(d.total_duration / 60)
@@ -59,7 +88,27 @@ function TopAppsBar({ data }) {
 
   return (
     <div style={cardStyle}>
-      <h3 style={cardTitle}>Top Applications (minutes)</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <h3 style={{ ...cardTitle, margin: 0 }}>Top Applications (minutes)</h3>
+        <select
+          value={period}
+          onChange={e => onPeriodChange(e.target.value)}
+          style={{
+            background: '#2a2a4a',
+            color: 'white',
+            border: '1px solid #444',
+            padding: '5px 10px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          <option value="">All Time</option>
+          <option value="day">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart data={formatted}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -459,12 +508,13 @@ export default function App() {
   const [weeklyTrends, setWeeklyTrends] = useState([]);
   const [selectedDevice, setSelectedDevice] = useState('');
   const [users, setUsers] = useState([]);
+  const [topAppsPeriod, setTopAppsPeriod] = useState('');
+  const [resourceAlerts, setResourceAlerts] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
       const deviceParam = selectedDevice ? `?device_id=${selectedDevice}` : '';
       axios.get(`${API}/api/analytics/overview${deviceParam}`).then(r => setOverview(r.data));
-      axios.get(`${API}/api/analytics/top-apps${deviceParam}`).then(r => setTopApps(r.data));
       axios.get(`${API}/api/analytics/resources${deviceParam}`).then(r => setResources(r.data));
       axios.get(`${API}/api/analytics/daily-usage${deviceParam}`).then(r => setDailyUsage(r.data));
       axios.get(`${API}/api/analytics/heatmap${deviceParam}`).then(r => setHeatmapData(r.data));
@@ -475,11 +525,22 @@ export default function App() {
       axios.get(`${API}/api/devices/status${deviceParam}`).then(r => setDeviceStatus(r.data));
       axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
       axios.get(`${API}/api/users`).then(r => setUsers(r.data));
+      axios.get(`${API}/api/analytics/resource-alerts${deviceParam}`).then(r => setResourceAlerts(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedDevice]);
+
+  useEffect(() => {
+    console.log('Fetching top apps, period:', topAppsPeriod);
+    const params = new URLSearchParams();
+    if (selectedDevice) params.append('device_id', selectedDevice);
+    if (topAppsPeriod) params.append('period', topAppsPeriod);
+    const paramStr = params.toString() ? `?${params.toString()}` : '';
+    console.log('URL:', `${API}/api/analytics/top-apps${paramStr}`);
+    axios.get(`${API}/api/analytics/top-apps${paramStr}`).then(r => setTopApps(r.data));
+  }, [selectedDevice, topAppsPeriod]);
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
@@ -516,7 +577,8 @@ export default function App() {
         {activePage === 'overview' && (
           <>
             <Overview data={overview} />
-            <TopAppsBar data={topApps} />
+            <ResourceAlerts alerts={resourceAlerts} />
+            <TopAppsBar data={topApps} period={topAppsPeriod} onPeriodChange={setTopAppsPeriod} />
           </>
         )}
         {activePage === 'resources' && <Resources data={resources} />}
