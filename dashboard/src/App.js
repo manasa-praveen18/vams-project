@@ -280,7 +280,54 @@ function LiveMonitoring({ data }) {
     </div>
   );
 }
-function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends }) {
+function TopTitlesBar({ data }) {
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitle}>Top Window Titles (Today)</h3>
+      <ResponsiveContainer width="100%" height={350}>
+        <BarChart data={data} layout="vertical" margin={{ left: 20, right: 40 }}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis type="number" unit=" min" />
+          <YAxis type="category" dataKey="title" width={220} tick={{ fontSize: 11 }} />
+          <Tooltip formatter={(v) => `${v} min`} />
+          <Bar dataKey="minutes" fill="#8884d8" />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const CATEGORY_COLORS = {
+  "Teams Meeting": "#FF4444",
+  "Communication": "#FF8042",
+  "Development": "#0088FE",
+  "Browser - Work": "#00C49F",
+  "Browser - Entertainment": "#FFBB28",
+  "Documents": "#A28DFF",
+  "System": "#888888",
+  "Other": "#cccccc"
+};
+
+function CategoryBreakdown({ data }) {
+  const colored = data.map(d => ({ ...d, fill: CATEGORY_COLORS[d.category] || "#aaa" }));
+  return (
+    <div style={cardStyle}>
+      <h3 style={cardTitle}>Activity Categories (Today)</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <PieChart>
+          <Pie data={colored} dataKey="minutes" nameKey="category" cx="50%" cy="50%" outerRadius={100}
+            label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}>
+            {colored.map((entry, i) => (
+              <Cell key={i} fill={entry.fill} />
+            ))}
+          </Pie>
+          <Tooltip formatter={(v) => `${v} min`} />
+        </PieChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends, topTitles, categories }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={cardStyle}>
@@ -326,6 +373,8 @@ function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrend
         <Heatmap data={heatmapData} />
         <Timeline data={timelineData} />
         <WeeklyTrends data={weeklyTrends} />
+        <TopTitlesBar data={topTitles} />
+        <CategoryBreakdown data={categories} />
       </div>
     </div>
   );
@@ -510,6 +559,8 @@ export default function App() {
   const [users, setUsers] = useState([]);
   const [topAppsPeriod, setTopAppsPeriod] = useState('');
   const [resourceAlerts, setResourceAlerts] = useState([]);
+  const [topTitles, setTopTitles] = useState([]);
+  const [categories, setCategories] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -526,6 +577,8 @@ export default function App() {
       axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
       axios.get(`${API}/api/users`).then(r => setUsers(r.data));
       axios.get(`${API}/api/analytics/resource-alerts${deviceParam}`).then(r => setResourceAlerts(r.data));
+      axios.get(`${API}/api/analytics/top-titles${deviceParam}`).then(r => setTopTitles(r.data));
+      axios.get(`${API}/api/analytics/categories${deviceParam}`).then(r => setCategories(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -584,7 +637,7 @@ export default function App() {
         {activePage === 'resources' && <Resources data={resources} />}
         {activePage === 'devices' && <Devices data={deviceStatus} sessionHistory={sessionHistory} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
-        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} topTitles={topTitles} categories={categories} />}
         {activePage === 'idle' && <IdleReport data={idleReport} />}
       </div>
     </div>

@@ -13,6 +13,8 @@ from slowapi.util import get_remote_address
 from fastapi.responses import StreamingResponse
 import csv
 import io
+import httpx
+from functools import lru_cache
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -24,6 +26,43 @@ from server.auth.jwt import create_access_token
 
 router = APIRouter()
 
+@lru_cache(maxsize=500)
+def classify_activity(app_name: str, window_title: str) -> str:
+    prompt = f"""Classify this computer activity into exactly one category.
+App: {app_name}
+Window Title: {window_title}
+
+Categories to choose from:
+- Teams Meeting
+- Communication
+- Development
+- Browser - Work
+- Browser - Entertainment
+- Documents
+- System
+- Other
+
+Reply with only the category name, nothing else."""
+
+    try:
+        response = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json"
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 20,
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=5.0
+        )
+        result = response.json()
+        return result["content"][0]["text"].strip()
+    except Exception:
+        return "Other"
 # Request models
 class RegisterRequest(BaseModel):
     device_name: str
@@ -497,3 +536,44 @@ def get_resource_alerts(device_id: Optional[str] = None, db: Session = Depends(g
 
     alerts.sort(key=lambda x: x["time"], reverse=True)
     return alerts[:10]
+@router.get("/api/analytics/top-titles")
+def get_top_titles(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    cutoff = datetime.now() - timedelta(days=1)
+    query = db.query(
+        ActivityLog.window_title,
+        ActivityLog.app_name,
+        func.sum(ActivityLog.duration).label("total_duration")
+    ).filter(ActivityLog.start_time >= cutoff)
+
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+
+    results = query.group_by(ActivityLog.window_title, ActivityLog.app_name)\
+        .order_by(func.sum(ActivityLog.duration).desc()).limit(10).all()
+
+    return [{
+        "title": (r.window_title or "Unknown")[:60],
+        "app": (r.app_name or "").replace(".exe", ""),
+        "minutes": round((r.total_duration or 0) / 60),
+        "category": classify_activity(r.app_name or "", r.window_title or "")
+    } for r in results]
+
+@router.get("/api/analytics/categories")
+def get_categories(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+    from datetime import timedelta
+
+    cutoff = datetime.now() - timedelta(days=1)
+    query = db.query(ActivityLog).filter(ActivityLog.start_time >= cutoff)
+    if device_id:
+        query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+
+    logs = query.all()
+    totals = {}
+    for log in logs:
+        cat = classify_activity(log.app_name or "", log.window_title or "")
+        totals[cat] = totals.get(cat, 0) + (log.duration or 0)
+
+    return [{"category": k, "minutes": round(v / 60)} for k, v in sorted(totals.items(), key=lambda x: -x[1])]
