@@ -537,19 +537,28 @@ def get_resource_alerts(device_id: Optional[str] = None, db: Session = Depends(g
     alerts.sort(key=lambda x: x["time"], reverse=True)
     return alerts[:10]
 @router.get("/api/analytics/top-titles")
-def get_top_titles(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_top_titles(device_id: Optional[str] = None, period: Optional[str] = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
     from datetime import timedelta
 
-    cutoff = datetime.now() - timedelta(days=1)
     query = db.query(
         ActivityLog.window_title,
         ActivityLog.app_name,
         func.sum(ActivityLog.duration).label("total_duration")
-    ).filter(ActivityLog.start_time >= cutoff)
+    )
 
     if device_id:
         query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+
+    if period == "day":
+        cutoff = datetime.now() - timedelta(days=1)
+        query = query.filter(ActivityLog.start_time >= cutoff)
+    elif period == "week":
+        cutoff = datetime.now() - timedelta(weeks=1)
+        query = query.filter(ActivityLog.start_time >= cutoff)
+    elif period == "month":
+        cutoff = datetime.now() - timedelta(days=30)
+        query = query.filter(ActivityLog.start_time >= cutoff)
 
     results = query.group_by(ActivityLog.window_title, ActivityLog.app_name)\
         .order_by(func.sum(ActivityLog.duration).desc()).limit(10).all()

@@ -280,10 +280,30 @@ function LiveMonitoring({ data }) {
     </div>
   );
 }
-function TopTitlesBar({ data }) {
+function TopTitlesBar({ data, period, onPeriodChange }) {
   return (
     <div style={cardStyle}>
-      <h3 style={cardTitle}>Top Window Titles (Today)</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <h3 style={{ ...cardTitle, margin: 0 }}>Top Window Titles</h3>
+        <select
+          value={period}
+          onChange={e => onPeriodChange(e.target.value)}
+          style={{
+            background: '#2a2a4a',
+            color: 'white',
+            border: '1px solid #444',
+            padding: '5px 10px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          <option value="day">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="">All Time</option>
+        </select>
+      </div>
       <ResponsiveContainer width="100%" height={350}>
         <BarChart data={data} layout="vertical" margin={{ left: 20, right: 40 }}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -327,7 +347,7 @@ function CategoryBreakdown({ data }) {
     </div>
   );
 }
-function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends, topTitles, categories }) {
+function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends, topTitles, categories, topTitlesPeriod, setTopTitlesPeriod  }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={cardStyle}>
@@ -373,7 +393,7 @@ function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrend
         <Heatmap data={heatmapData} />
         <Timeline data={timelineData} />
         <WeeklyTrends data={weeklyTrends} />
-        <TopTitlesBar data={topTitles} />
+        <TopTitlesBar data={topTitles} period={topTitlesPeriod} onPeriodChange={setTopTitlesPeriod} />
         <CategoryBreakdown data={categories} />
       </div>
     </div>
@@ -561,6 +581,7 @@ export default function App() {
   const [resourceAlerts, setResourceAlerts] = useState([]);
   const [topTitles, setTopTitles] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [topTitlesPeriod, setTopTitlesPeriod] = useState('day');
 
   useEffect(() => {
     const fetchData = () => {
@@ -577,7 +598,6 @@ export default function App() {
       axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
       axios.get(`${API}/api/users`).then(r => setUsers(r.data));
       axios.get(`${API}/api/analytics/resource-alerts${deviceParam}`).then(r => setResourceAlerts(r.data));
-      axios.get(`${API}/api/analytics/top-titles${deviceParam}`).then(r => setTopTitles(r.data));
       axios.get(`${API}/api/analytics/categories${deviceParam}`).then(r => setCategories(r.data));
     };
     fetchData();
@@ -594,6 +614,14 @@ export default function App() {
     console.log('URL:', `${API}/api/analytics/top-apps${paramStr}`);
     axios.get(`${API}/api/analytics/top-apps${paramStr}`).then(r => setTopApps(r.data));
   }, [selectedDevice, topAppsPeriod]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedDevice) params.append('device_id', selectedDevice);
+    if (topTitlesPeriod) params.append('period', topTitlesPeriod);
+    const paramStr = params.toString() ? `?${params.toString()}` : '';
+    axios.get(`${API}/api/analytics/top-titles${paramStr}`).then(r => setTopTitles(r.data));
+  }, [selectedDevice, topTitlesPeriod]);
 
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
@@ -637,7 +665,7 @@ export default function App() {
         {activePage === 'resources' && <Resources data={resources} />}
         {activePage === 'devices' && <Devices data={deviceStatus} sessionHistory={sessionHistory} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
-        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} topTitles={topTitles} categories={categories} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} topTitles={topTitles} categories={categories} topTitlesPeriod={topTitlesPeriod} setTopTitlesPeriod={setTopTitlesPeriod} />}
         {activePage === 'idle' && <IdleReport data={idleReport} />}
       </div>
     </div>
