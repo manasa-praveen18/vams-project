@@ -571,13 +571,20 @@ def get_top_titles(device_id: Optional[str] = None, period: Optional[str] = None
     } for r in results]
 
 @router.get("/api/analytics/categories")
-def get_categories(device_id: Optional[str] = None, db: Session = Depends(get_db)):
+def get_categories(device_id: Optional[str] = None, period: Optional[str] = None, db: Session = Depends(get_db)):
     from datetime import timedelta
 
-    cutoff = datetime.now() - timedelta(days=1)
-    query = db.query(ActivityLog).filter(ActivityLog.start_time >= cutoff)
+    query = db.query(ActivityLog)
+
     if device_id:
         query = query.filter(ActivityLog.device_id == uuid.UUID(device_id))
+
+    if period == "day":
+        query = query.filter(ActivityLog.start_time >= datetime.now() - timedelta(days=1))
+    elif period == "week":
+        query = query.filter(ActivityLog.start_time >= datetime.now() - timedelta(weeks=1))
+    elif period == "month":
+        query = query.filter(ActivityLog.start_time >= datetime.now() - timedelta(days=30))
 
     logs = query.all()
     totals = {}

@@ -328,11 +328,31 @@ const CATEGORY_COLORS = {
   "Other": "#cccccc"
 };
 
-function CategoryBreakdown({ data }) {
+function CategoryBreakdown({ data, period, onPeriodChange }) {
   const colored = data.map(d => ({ ...d, fill: CATEGORY_COLORS[d.category] || "#aaa" }));
   return (
     <div style={cardStyle}>
-      <h3 style={cardTitle}>Activity Categories (Today)</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <h3 style={{ ...cardTitle, margin: 0 }}>Activity Categories</h3>
+        <select
+          value={period}
+          onChange={e => onPeriodChange(e.target.value)}
+          style={{
+            background: '#2a2a4a',
+            color: 'white',
+            border: '1px solid #444',
+            padding: '5px 10px',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            fontSize: '13px'
+          }}
+        >
+          <option value="day">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+          <option value="">All Time</option>
+        </select>
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <PieChart>
           <Pie data={colored} dataKey="minutes" nameKey="category" cx="50%" cy="50%" outerRadius={100}
@@ -347,7 +367,7 @@ function CategoryBreakdown({ data }) {
     </div>
   );
 }
-function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends, topTitles, categories, topTitlesPeriod, setTopTitlesPeriod  }) {
+function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrends, topTitles, categories, topTitlesPeriod, setTopTitlesPeriod, categoriesPeriod, setCategoriesPeriod   }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div style={cardStyle}>
@@ -394,7 +414,7 @@ function Analytics({ topApps, dailyUsage, heatmapData, timelineData, weeklyTrend
         <Timeline data={timelineData} />
         <WeeklyTrends data={weeklyTrends} />
         <TopTitlesBar data={topTitles} period={topTitlesPeriod} onPeriodChange={setTopTitlesPeriod} />
-        <CategoryBreakdown data={categories} />
+        <CategoryBreakdown data={categories} period={categoriesPeriod} onPeriodChange={setCategoriesPeriod} />
       </div>
     </div>
   );
@@ -582,6 +602,7 @@ export default function App() {
   const [topTitles, setTopTitles] = useState([]);
   const [categories, setCategories] = useState([]);
   const [topTitlesPeriod, setTopTitlesPeriod] = useState('day');
+  const [categoriesPeriod, setCategoriesPeriod] = useState('day');
 
   useEffect(() => {
     const fetchData = () => {
@@ -598,7 +619,6 @@ export default function App() {
       axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
       axios.get(`${API}/api/users`).then(r => setUsers(r.data));
       axios.get(`${API}/api/analytics/resource-alerts${deviceParam}`).then(r => setResourceAlerts(r.data));
-      axios.get(`${API}/api/analytics/categories${deviceParam}`).then(r => setCategories(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -623,6 +643,13 @@ export default function App() {
     axios.get(`${API}/api/analytics/top-titles${paramStr}`).then(r => setTopTitles(r.data));
   }, [selectedDevice, topTitlesPeriod]);
 
+useEffect(() => {
+  const params = new URLSearchParams();
+  if (selectedDevice) params.append('device_id', selectedDevice);
+  if (categoriesPeriod) params.append('period', categoriesPeriod);
+  const paramStr = params.toString() ? `?${params.toString()}` : '';
+  axios.get(`${API}/api/analytics/categories${paramStr}`).then(r => setCategories(r.data));
+}, [selectedDevice, categoriesPeriod]);
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       <div style={{ backgroundColor: '#1a1a2e', color: 'white', padding: '15px 30px', display: 'flex', alignItems: 'center', gap: '30px' }}>
@@ -665,7 +692,7 @@ export default function App() {
         {activePage === 'resources' && <Resources data={resources} />}
         {activePage === 'devices' && <Devices data={deviceStatus} sessionHistory={sessionHistory} />}
         {activePage === 'live' && <LiveMonitoring data={liveData} />}
-        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} topTitles={topTitles} categories={categories} topTitlesPeriod={topTitlesPeriod} setTopTitlesPeriod={setTopTitlesPeriod} />}
+        {activePage === 'analytics' && <Analytics topApps={topApps} dailyUsage={dailyUsage} heatmapData={heatmapData} timelineData={timelineData} weeklyTrends={weeklyTrends} topTitles={topTitles} categories={categories} topTitlesPeriod={topTitlesPeriod} setTopTitlesPeriod={setTopTitlesPeriod} categoriesPeriod={categoriesPeriod} setCategoriesPeriod={setCategoriesPeriod} />}
         {activePage === 'idle' && <IdleReport data={idleReport} />}
       </div>
     </div>
