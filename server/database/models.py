@@ -12,7 +12,9 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     username = Column(String, unique=True, nullable=False)
     department = Column(String, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    password_hash = Column(String, nullable=True)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.now)
 
 class Device(Base):
     __tablename__ = "devices"

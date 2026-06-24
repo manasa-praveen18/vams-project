@@ -580,6 +580,57 @@ function WeeklyTrends({ data }) {
     </div>
   );
 }
+function LoginPage({ onLogin }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await axios.post(`${API}/api/admin/login`, { username, password });
+      localStorage.setItem('vams_token', res.data.token);
+      onLogin(res.data.token);
+    } catch {
+      setError('Invalid username or password');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d0d1a' }}>
+      <div style={{ background: '#1a1a2e', padding: '40px', borderRadius: '12px', width: '360px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+        <h2 style={{ color: 'white', textAlign: 'center', marginBottom: '8px' }}>VAMS</h2>
+        <p style={{ color: '#888', textAlign: 'center', marginBottom: '30px', fontSize: '14px' }}>Admin Dashboard</p>
+        <input
+          type="text"
+          placeholder="Username"
+          value={username}
+          onChange={e => setUsername(e.target.value)}
+          style={{ width: '100%', padding: '12px', marginBottom: '12px', borderRadius: '6px', border: '1px solid #333', background: '#0d0d1a', color: 'white', boxSizing: 'border-box' }}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleLogin()}
+          style={{ width: '100%', padding: '12px', marginBottom: '16px', borderRadius: '6px', border: '1px solid #333', background: '#0d0d1a', color: 'white', boxSizing: 'border-box' }}
+        />
+        {error && <p style={{ color: '#FF4444', fontSize: '13px', marginBottom: '12px' }}>{error}</p>}
+        <button
+          onClick={handleLogin}
+          disabled={loading}
+          style={{ width: '100%', padding: '12px', background: '#0088FE', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '15px', fontWeight: 'bold' }}
+        >
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [overview, setOverview] = useState({});
@@ -603,6 +654,7 @@ export default function App() {
   const [categories, setCategories] = useState([]);
   const [topTitlesPeriod, setTopTitlesPeriod] = useState('day');
   const [categoriesPeriod, setCategoriesPeriod] = useState('day');
+  const [adminToken, setAdminToken] = useState(localStorage.getItem('vams_token'));
 
   useEffect(() => {
     const fetchData = () => {
@@ -643,13 +695,18 @@ export default function App() {
     axios.get(`${API}/api/analytics/top-titles${paramStr}`).then(r => setTopTitles(r.data));
   }, [selectedDevice, topTitlesPeriod]);
 
-useEffect(() => {
-  const params = new URLSearchParams();
-  if (selectedDevice) params.append('device_id', selectedDevice);
-  if (categoriesPeriod) params.append('period', categoriesPeriod);
-  const paramStr = params.toString() ? `?${params.toString()}` : '';
-  axios.get(`${API}/api/analytics/categories${paramStr}`).then(r => setCategories(r.data));
-}, [selectedDevice, categoriesPeriod]);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (selectedDevice) params.append('device_id', selectedDevice);
+    if (categoriesPeriod) params.append('period', categoriesPeriod);
+    const paramStr = params.toString() ? `?${params.toString()}` : '';
+    axios.get(`${API}/api/analytics/categories${paramStr}`).then(r => setCategories(r.data));
+  }, [selectedDevice, categoriesPeriod]);
+
+  if (!adminToken) {
+    return <LoginPage onLogin={setAdminToken} />;
+  }
+
   return (
     <div style={{ fontFamily: 'Arial, sans-serif', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
       <div style={{ backgroundColor: '#1a1a2e', color: 'white', padding: '15px 30px', display: 'flex', alignItems: 'center', gap: '30px' }}>
@@ -662,23 +719,29 @@ useEffect(() => {
           }}>{page}</button>
         ))}
         <select
-        value={selectedDevice}
-        onChange={e => setSelectedDevice(e.target.value)}
-        style={{
-          marginLeft: 'auto',
-          background: '#2a2a4a',
-          color: 'white',
-          border: '1px solid #444',
-          padding: '6px 12px',
-          borderRadius: '4px',
-          cursor: 'pointer'
-        }}
+          value={selectedDevice}
+          onChange={e => setSelectedDevice(e.target.value)}
+          style={{
+            marginLeft: 'auto',
+            background: '#2a2a4a',
+            color: 'white',
+            border: '1px solid #444',
+            padding: '6px 12px',
+            borderRadius: '4px',
+            cursor: 'pointer'
+          }}
         >
           <option value="">All Devices</option>
           {deviceStatus.map(d => (
             <option key={d.id} value={d.id}>{d.device_name}</option>
-            ))}
+          ))}
         </select>
+        <button
+          onClick={() => { localStorage.removeItem('vams_token'); setAdminToken(null); }}
+          style={{ background: 'transparent', border: '1px solid #555', color: '#ccc', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}
+        >
+          Logout
+        </button>
       </div>
 
       <div style={{ padding: '30px' }}>
@@ -698,7 +761,6 @@ useEffect(() => {
     </div>
   );
 }
-
 const cardStyle = { backgroundColor: 'white', borderRadius: '8px', padding: '20px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' };
 const cardTitle = { margin: '0 0 10px 0', color: '#666', fontSize: '14px' };
 const cardValue = { margin: 0, fontSize: '32px', fontWeight: 'bold', color: '#1a1a2e' };

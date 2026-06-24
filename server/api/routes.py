@@ -15,6 +15,7 @@ import csv
 import io
 import httpx
 from functools import lru_cache
+import bcrypt
 
 limiter = Limiter(key_func=get_remote_address)
 
@@ -593,3 +594,27 @@ def get_categories(device_id: Optional[str] = None, period: Optional[str] = None
         totals[cat] = totals.get(cat, 0) + (log.duration or 0)
 
     return [{"category": k, "minutes": round(v / 60)} for k, v in sorted(totals.items(), key=lambda x: -x[1])]
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/api/admin/login")
+def admin_login(request: AdminLoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.username == request.username, User.is_admin == True).first()
+    if not user or not user.password_hash:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not bcrypt.checkpw(request.password.encode(), user.password_hash.encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_access_token({"username": user.username, "is_admin": True})
+    return {"token": token, "username": user.username}
+
+@router.post("/api/admin/setup")
+def setup_admin(request: AdminLoginRequest, db: Session = Depends(get_db)):
+    existing = db.query(User).filter(User.is_admin == True).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Admin already exists")
+    password_hash = bcrypt.hashpw(request.password.encode(), bcrypt.gensalt()).decode()
+    admin = User(username=request.username, password_hash=password_hash, is_admin=True)
+    db.add(admin)
+    db.commit()
+    return {"message": "Admin created successfully"}
