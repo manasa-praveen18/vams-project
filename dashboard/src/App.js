@@ -631,7 +631,47 @@ function LoginPage({ onLogin }) {
     </div>
   );
 }
-
+function LiveActivityTable({ data }) {
+  return (
+    <div style={{ ...cardStyle, marginBottom: '20px', marginTop: '20px' }}>
+      <h3 style={cardTitle}>Live User Activity</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ backgroundColor: '#f0f0f0' }}>
+            <th style={thStyle}>User</th>
+            <th style={thStyle}>Device</th>
+            <th style={thStyle}>Current App</th>
+            <th style={thStyle}>Window Title</th>
+            <th style={thStyle}>Status</th>
+            <th style={thStyle}>Last Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((d, i) => (
+            <tr key={i}>
+              <td style={tdStyle}>{d.username}</td>
+              <td style={tdStyle}>{d.device_name}</td>
+              <td style={tdStyle}>{d.current_app || '-'}</td>
+              <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {d.in_call
+                  ? <span style={{ color: '#0088FE', fontWeight: 'bold' }}>📹 In call with {d.call_with}</span>
+                  : d.window_title || '-'}
+              </td>
+              <td style={tdStyle}>
+                {!d.is_online
+                  ? <span style={{ color: '#999' }}>🔴 Offline</span>
+                  : d.is_idle
+                  ? <span style={{ color: '#FF8042' }}>🟡 Idle</span>
+                  : <span style={{ color: '#00C49F' }}>🟢 Active</span>}
+              </td>
+              <td style={{ ...tdStyle, fontSize: '12px', color: '#999' }}>{d.last_updated || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 export default function App() {
   const [overview, setOverview] = useState({});
   const [topApps, setTopApps] = useState([]);
@@ -655,6 +695,7 @@ export default function App() {
   const [topTitlesPeriod, setTopTitlesPeriod] = useState('day');
   const [categoriesPeriod, setCategoriesPeriod] = useState('day');
   const [adminToken, setAdminToken] = useState(localStorage.getItem('vams_token'));
+  const [allLiveData, setAllLiveData] = useState([]);
 
   useEffect(() => {
     const fetchData = () => {
@@ -671,6 +712,7 @@ export default function App() {
       axios.get(`${API}/api/session/history${deviceParam}`).then(r => setSessionHistory(r.data));
       axios.get(`${API}/api/users`).then(r => setUsers(r.data));
       axios.get(`${API}/api/analytics/resource-alerts${deviceParam}`).then(r => setResourceAlerts(r.data));
+      axios.get(`${API}/api/live/all`).then(r => setAllLiveData(r.data));
     };
     fetchData();
     const interval = setInterval(fetchData, 30000);
@@ -748,6 +790,7 @@ export default function App() {
         {activePage === 'overview' && (
           <>
             <Overview data={overview} />
+            <LiveActivityTable data={allLiveData} />
             <ResourceAlerts alerts={resourceAlerts} />
             <TopAppsBar data={topApps} period={topAppsPeriod} onPeriodChange={setTopAppsPeriod} />
           </>

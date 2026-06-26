@@ -275,7 +275,7 @@ def get_daily_usage(device_id: Optional[str] = None, db: Session = Depends(get_d
 def get_device_status(db: Session = Depends(get_db)):
     from datetime import timedelta
     devices = db.query(Device).all()
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = datetime.utcnow()
     
     return [{
         "id": str(d.id),
@@ -618,3 +618,40 @@ def setup_admin(request: AdminLoginRequest, db: Session = Depends(get_db)):
     db.add(admin)
     db.commit()
     return {"message": "Admin created successfully"}
+@router.get("/api/live/all")
+def get_all_live_status(db: Session = Depends(get_db)):
+    devices = db.query(Device).all()
+    now = datetime.utcnow()
+    result = []
+
+    for device in devices:
+        latest_log = db.query(ActivityLog)\
+            .filter(ActivityLog.device_id == device.id)\
+            .order_by(ActivityLog.end_time.desc()).first()
+        user = db.query(User).filter(User.id == device.user_id).first()
+
+        is_online = device.last_seen and (now - device.last_seen).total_seconds() < 120
+
+        # detect if in a Teams call
+        in_call = False
+        call_with = None
+        if latest_log:
+            app_lower = (latest_log.app_name or "").lower()
+            title_lower = (latest_log.window_title or "").lower()
+            if "teams" in app_lower and any(x in title_lower for x in ["meeting", "call", "| microsoft teams"]):
+                in_call = True
+                call_with = latest_log.window_title.split("|")[0].strip()
+
+        result.append({
+            "username": user.username if user else "Unknown",
+            "device_name": device.device_name,
+            "current_app": latest_log.app_name.replace(".exe", "") if latest_log else None,
+            "window_title": latest_log.window_title if latest_log else None,
+            "is_idle": latest_log.is_idle if latest_log else None,
+            "is_online": is_online,
+            "in_call": in_call,
+            "call_with": call_with,
+            "last_updated": latest_log.end_time.strftime("%H:%M:%S") if latest_log else None
+        })
+
+    return result
