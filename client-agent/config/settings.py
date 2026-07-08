@@ -12,7 +12,7 @@ SYNC_INTERVAL = 60  # seconds between sync attempts
 BATCH_SIZE = 50  # number of logs to upload at once
 
 # Server settings
-SERVER_URL = "https://vams.theviswagroup.com"  # change to real server URL later
+SERVER_URL = "https://viswaendpoints.theviswagroup.com"  # change to real server URL later
 API_ENDPOINT_REGISTER = "/api/client/register"
 API_ENDPOINT_UPLOAD = "/api/logs/upload"
 API_ENDPOINT_HEALTH = "/api/health"
