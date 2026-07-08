@@ -47,21 +47,15 @@ Reply with only the category name, nothing else."""
 
     try:
         response = httpx.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json"
-            },
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
+            params={"key": os.environ.get("GEMINI_API_KEY", "")},
             json={
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 20,
-                "messages": [{"role": "user", "content": prompt}]
+                "contents": [{"parts": [{"text": prompt}]}]
             },
             timeout=5.0
         )
         result = response.json()
-        return result["content"][0]["text"].strip()
+        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
     except Exception:
         return "Other"
 # Request models
