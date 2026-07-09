@@ -47,7 +47,7 @@ Reply with only the category name, nothing else."""
 
     try:
         response = httpx.post(
-            "https://viswaendpoints.theviswagroup.com/v1beta/models/gemini-2.0-flash:generateContent",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent",
             params={"key": os.environ.get("GEMINI_API_KEY", "")},
             json={
                 "contents": [{"parts": [{"text": prompt}]}]
