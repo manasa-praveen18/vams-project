@@ -17,3 +17,9 @@ dashboard/build/
 
 # VS Code
 .vscode/
+
+client-agent/build/
+client-agent/dist/
+client-agent/*.spec
+*.exe
+*.zip
