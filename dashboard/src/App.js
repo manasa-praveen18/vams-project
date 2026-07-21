@@ -199,7 +199,7 @@ function Devices({ data, sessionHistory }) {
           </tbody>
         </table>
       </div>
-       <RemoteCommands devices={data} />
+      <RemoteCommands devices={data} />
     </div>
   );
 }
