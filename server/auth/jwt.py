@@ -33,11 +33,13 @@ def get_current_device(authorization: Optional[str] = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return payload
 
-def get_current_admin(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if not payload.get("is_admin"):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+def get_current_admin(authorization: Optional[str] = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid token")
+    token = authorization.replace("Bearer ", "")
+    payload = verify_token(token)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if not payload.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return payload
