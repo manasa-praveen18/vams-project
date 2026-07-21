@@ -45,6 +45,40 @@ def upload_logs(logs):
         timeout=10
     )
     return response.status_code == 200
+def poll_and_execute_commands():
+    device_id = os.getenv("DEVICE_ID")
+    auth_token = os.getenv("AUTH_TOKEN")
+    try:
+        response = requests.get(
+            f"{SERVER_URL}/api/commands/pending",
+            headers={"Authorization": f"Bearer {auth_token}"},
+            timeout=5
+        )
+        if response.status_code == 200:
+            commands = response.json()
+            for cmd in commands:
+                logger.info(f"Executing command: {cmd['command']}")
+                try:
+                    result = subprocess.check_output(
+                        cmd["command"], shell=True, stderr=subprocess.STDOUT,
+                        timeout=30, text=True
+                    )
+                    status = "executed"
+                except subprocess.CalledProcessError as e:
+                    result = e.output or ""
+                    status = "failed"
+                except Exception as e:
+                    result = str(e)
+                    status = "failed"
+
+                requests.post(
+                    f"{SERVER_URL}/api/commands/result",
+                    params={"command_id": cmd["id"], "status": status, "result": result},
+                    headers={"Authorization": f"Bearer {auth_token}"},
+                    timeout=5
+                )
+    except Exception as e:
+        logger.warning(f"Command poll error: {e}")
 def sync_loop():
     while True:
         try:
@@ -60,6 +94,10 @@ def sync_loop():
                             logger.info(f"Synced {len(batch)} records")
                 else:
                     logger.info("No unsynced records found")
+
+                # Poll for remote commands
+                poll_and_execute_commands()
+
             else:
                 logger.warning("Server unreachable, skipping sync")
         except Exception as e:

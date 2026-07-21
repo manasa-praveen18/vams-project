@@ -199,6 +199,7 @@ function Devices({ data, sessionHistory }) {
           </tbody>
         </table>
       </div>
+       <RemoteCommands devices={data} />
     </div>
   );
 }
@@ -669,6 +670,103 @@ function LiveActivityTable({ data }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+function RemoteCommands({ devices }) {
+  const [selectedDevice, setSelectedDevice] = useState('');
+  const [command, setCommand] = useState('');
+  const [history, setHistory] = useState([]);
+  const [sending, setSending] = useState(false);
+
+  const sendCommand = async () => {
+    if (!selectedDevice || !command) return;
+    setSending(true);
+    try {
+      await axios.post(`${API}/api/commands/send`, null, {
+        params: { device_id: selectedDevice, command }
+      });
+      setCommand('');
+      fetchHistory();
+    } catch (e) {
+      alert('Failed to send command');
+    }
+    setSending(false);
+  };
+
+  const fetchHistory = async () => {
+    if (!selectedDevice) return;
+    try {
+      const r = await axios.get(`${API}/api/commands/history`, {
+        params: { device_id: selectedDevice }
+      });
+      setHistory(r.data);
+    } catch (e) {
+      setHistory([]);
+    }
+  };
+
+  useEffect(() => { fetchHistory(); }, [selectedDevice]);
+
+  return (
+    <div style={{ ...cardStyle, marginTop: '20px' }}>
+      <h3 style={cardTitle}>Remote Command Execution</h3>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <select
+          value={selectedDevice}
+          onChange={e => setSelectedDevice(e.target.value)}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', minWidth: '200px' }}
+        >
+          <option value="">Select Device</option>
+          {devices.map(d => <option key={d.id} value={d.id}>{d.device_name}</option>)}
+        </select>
+        <input
+          type="text"
+          placeholder="Enter command e.g. ipconfig"
+          value={command}
+          onChange={e => setCommand(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && sendCommand()}
+          style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ddd', flex: 1, minWidth: '200px' }}
+        />
+        <button
+          onClick={sendCommand}
+          disabled={sending || !selectedDevice || !command}
+          style={{ padding: '8px 16px', background: '#0088FE', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+        >
+          {sending ? 'Sending...' : 'Send Command'}
+        </button>
+      </div>
+      {history.length > 0 && (
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ backgroundColor: '#f0f0f0' }}>
+              <th style={thStyle}>Command</th>
+              <th style={thStyle}>Status</th>
+              <th style={thStyle}>Result</th>
+              <th style={thStyle}>Sent At</th>
+              <th style={thStyle}>Executed At</th>
+            </tr>
+          </thead>
+          <tbody>
+            {history.map((c, i) => (
+              <tr key={i}>
+                <td style={tdStyle}><code>{c.command}</code></td>
+                <td style={tdStyle}>
+                  <span style={{
+                    color: c.status === 'executed' ? '#00C49F' : c.status === 'failed' ? '#FF4444' : '#FF8042',
+                    fontWeight: 'bold'
+                  }}>{c.status}</span>
+                </td>
+                <td style={{ ...tdStyle, maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: '12px' }}>
+                  {c.result || '-'}
+                </td>
+                <td style={{ ...tdStyle, fontSize: '12px' }}>{c.created_at ? new Date(c.created_at).toLocaleString() : '-'}</td>
+                <td style={{ ...tdStyle, fontSize: '12px' }}>{c.executed_at ? new Date(c.executed_at).toLocaleString() : '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

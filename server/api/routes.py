@@ -6,7 +6,8 @@ from sqlalchemy import Integer
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-from server.auth.jwt import create_access_token, get_current_device
+from server.auth.jwt import create_access_token, get_current_device, get_current_admin
+from server.database.models import User, Device, ActivityLog, RemoteCommand
 import uuid
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -649,3 +650,48 @@ def get_all_live_status(db: Session = Depends(get_db)):
         })
 
     return result
+# Admin sends command to a device
+@router.post("/api/commands/send")
+def send_command(device_id: str, command: str, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
+    cmd = RemoteCommand(
+        device_id=uuid.UUID(device_id),
+        command=command
+    )
+    db.add(cmd)
+    db.commit()
+    return {"message": "Command queued", "command_id": str(cmd.id)}
+
+# Admin views command history
+@router.get("/api/commands/history")
+def get_command_history(device_id: str, db: Session = Depends(get_db), current_admin: dict = Depends(get_current_admin)):
+    commands = db.query(RemoteCommand).filter(
+        RemoteCommand.device_id == uuid.UUID(device_id)
+    ).order_by(RemoteCommand.created_at.desc()).limit(20).all()
+    return [{
+        "id": str(c.id),
+        "command": c.command,
+        "status": c.status,
+        "result": c.result,
+        "created_at": str(c.created_at),
+        "executed_at": str(c.executed_at) if c.executed_at else None
+    } for c in commands]
+
+# Agent polls for pending commands (device JWT)
+@router.get("/api/commands/pending")
+def get_pending_commands(db: Session = Depends(get_db), current_device: dict = Depends(get_current_device)):
+    commands = db.query(RemoteCommand).filter(
+        RemoteCommand.device_id == uuid.UUID(current_device["device_id"]),
+        RemoteCommand.status == "pending"
+    ).all()
+    return [{"id": str(c.id), "command": c.command} for c in commands]
+
+# Agent reports result (device JWT)
+@router.post("/api/commands/result")
+def command_result(command_id: str, status: str, result: str = "", db: Session = Depends(get_db), current_device: dict = Depends(get_current_device)):
+    cmd = db.query(RemoteCommand).filter(RemoteCommand.id == uuid.UUID(command_id)).first()
+    if cmd:
+        cmd.status = status
+        cmd.result = result
+        cmd.executed_at = datetime.now()
+        db.commit()
+    return {"message": "Result recorded"}

@@ -52,3 +52,14 @@ class SessionLog(Base):
     logout_time = Column(DateTime, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+
+class RemoteCommand(Base):
+    __tablename__ = "remote_commands"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    device_id = Column(UUID(as_uuid=True), ForeignKey("devices.id"), nullable=False)
+    command = Column(String, nullable=False)
+    status = Column(String, default="pending")
+    result = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    executed_at = Column(DateTime, nullable=True)
