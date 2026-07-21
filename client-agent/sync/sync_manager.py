@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from utils.logger import logger
 from database.db_manager import get_unsynced_logs, mark_as_synced
 from sync.retry_handler import retry_upload
-from config.settings import DEVICE_ID, SERVER_URL, API_ENDPOINT_UPLOAD, API_ENDPOINT_HEALTH, SYNC_INTERVAL, BATCH_SIZE, AUTH_TOKEN
+from config.settings import SERVER_URL, API_ENDPOINT_UPLOAD, API_ENDPOINT_HEALTH, SYNC_INTERVAL, BATCH_SIZE
 import time
 
 def is_server_reachable():
@@ -18,6 +18,9 @@ def is_server_reachable():
         return False
 
 def upload_logs(logs):
+    device_id = os.getenv("DEVICE_ID")
+    auth_token = os.getenv("AUTH_TOKEN")
+    
     payload = []
     for log in logs:
         payload.append({
@@ -37,12 +40,11 @@ def upload_logs(logs):
 
     response = requests.post(
         f"{SERVER_URL}{API_ENDPOINT_UPLOAD}",
-        json={"device_id": DEVICE_ID, "logs": payload},
-        headers={"Authorization": f"Bearer {AUTH_TOKEN}"},
+        json={"device_id": device_id, "logs": payload},
+        headers={"Authorization": f"Bearer {auth_token}"},
         timeout=10
     )
     return response.status_code == 200
-
 def sync_loop():
     while True:
         try:
