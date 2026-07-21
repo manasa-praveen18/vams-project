@@ -683,8 +683,10 @@ function RemoteCommands({ devices }) {
     if (!selectedDevice || !command) return;
     setSending(true);
     try {
+      const token = localStorage.getItem('vams_token');
       await axios.post(`${API}/api/commands/send`, null, {
-        params: { device_id: selectedDevice, command }
+        params: { device_id: selectedDevice, command },
+        headers: { Authorization: `Bearer ${token}` }
       });
       setCommand('');
       fetchHistory();
@@ -697,8 +699,10 @@ function RemoteCommands({ devices }) {
   const fetchHistory = async () => {
     if (!selectedDevice) return;
     try {
+      const token = localStorage.getItem('vams_token');
       const r = await axios.get(`${API}/api/commands/history`, {
-        params: { device_id: selectedDevice }
+        params: { device_id: selectedDevice },
+        headers: { Authorization: `Bearer ${token}` }
       });
       setHistory(r.data);
     } catch (e) {
